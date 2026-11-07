@@ -1,6 +1,6 @@
 [package]
 name = "pgymenu-tauri"
-version = "1.0.0"
+version = "1.0.1"
 description = "PGY 随身 WiFi 菜单栏客户端（Tauri 2 原型）"
 edition = "2021"
 

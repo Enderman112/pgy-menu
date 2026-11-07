@@ -85,7 +85,7 @@ git tag v1.0.0 && git push origin v1.0.0
 
 ## 已知限制
 
-- 发布包**未签名**：macOS 首次打开需右键 →「打开」；Windows 可能弹 SmartScreen
+- 发布包只有 **ad-hoc 签名**（未公证）：macOS 首次打开需右键 →「打开」；若仍提示异常，可执行 `xattr -dr com.apple.quarantine /Applications/PGYMenu.app`；Windows 可能弹 SmartScreen
 - **短信**：本机固件未启用短信模块（`sms_capacity_info` 全 0），故未实现
 - 默认管理密码为 `admin`，可在「设置 → 设备」里修改并保存到系统钥匙串
 - 频段锁定只读展示；设备固件有接口但锁错频段会无服务
