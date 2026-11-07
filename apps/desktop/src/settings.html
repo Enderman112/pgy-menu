@@ -121,6 +121,11 @@
         </div>
         <div class="warn" style="margin-top:8px">切换后设备会重新注册网络，信号可能短暂中断（约 10~30 秒）。</div>
       </div>
+
+      <div class="card">
+        <h3>接入点 (APN)</h3>
+        <div id="apnList" class="hint">加载中…</div>
+      </div>
     </div>
 
     <!-- WiFi -->
@@ -191,6 +196,28 @@
 
     <!-- 设备 -->
     <div class="page" id="page-device">
+
+      <div class="card">
+        <h3>登录与启动</h3>
+        <div class="row" style="margin-bottom:8px">
+          <label class="muted" style="width:72px">管理密码</label>
+          <input type="password" id="adminPwd" placeholder="默认 admin" style="width:200px">
+          <button class="primary" id="btnSavePwd">保存并登录</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <label class="muted" style="width:72px">修改密码</label>
+          <input type="password" id="oldPwd" placeholder="旧密码" style="width:150px">
+          <input type="password" id="newPwd" placeholder="新密码" style="width:150px">
+          <button id="btnChangePwd">修改设备密码</button>
+        </div>
+        <div class="row">
+          <label class="muted" style="width:72px">开机自启</label>
+          <button class="switch" id="autostartSwitch"></button>
+          <span class="metric-title" style="margin-left:8px">登录时自动启动</span>
+        </div>
+        <div class="hint" style="margin-top:8px">密码保存在系统钥匙串（macOS Keychain / Windows 凭据管理器）。</div>
+      </div>
+
       <div class="card">
         <h3>维护</h3>
         <div class="row" style="gap:10px;flex-wrap:wrap">

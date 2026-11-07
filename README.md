@@ -17,12 +17,13 @@
 - **右键菜单**：打开面板 / 设置 / 网页管理 / 退出
 - **设置窗口**
   - 概览：信号、连接状态、设备信息（IMEI / 号码 / ICCID / 固件）
-  - 网络：SIM 切换（内置 eSIM / 外置实体卡）、拨号连接 / 断开、网络模式
+  - 网络：SIM 切换（内置 eSIM / 外置实体卡）、拨号连接 / 断开、网络模式、APN 列表与切换
   - WiFi：热点开关、SSID、密码、隐藏 SSID
   - 路由：LAN IP / 掩码 / DHCP 地址池 / 租期、UPnP、DMZ
-  - 设备：重启、打开网页管理、退出
+  - 设备：管理密码（钥匙串保存）、修改设备密码、开机自启、重启、打开网页管理、退出
 - **2 秒轮询**，Rust 后端直连设备 HTTP API（前端不碰网络，无 CORS 问题）
 - **macOS 菜单栏 / Windows 通知区域** 原生托盘体验
+- 管理密码存入系统钥匙串（macOS Keychain / Windows 凭据管理器），开机自启用 Tauri autostart 插件
 
 ## 技术栈与目录
 
@@ -86,10 +87,14 @@ git tag v1.0.0 && git push origin v1.0.0
 
 - 发布包**未签名**：macOS 首次打开需右键 →「打开」；Windows 可能弹 SmartScreen
 - **短信**：本机固件未启用短信模块（`sms_capacity_info` 全 0），故未实现
-- 管理密码默认 `admin`，暂未做密码设置 / 加密持久化界面（TODO）
+- 默认管理密码为 `admin`，可在「设置 → 设备」里修改并保存到系统钥匙串
 - 频段锁定只读展示；设备固件有接口但锁错频段会无服务
 - 托盘面板定位：macOS 贴菜单栏图标，Windows 固定在任务栏上方右下角
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

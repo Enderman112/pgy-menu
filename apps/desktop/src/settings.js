@@ -134,6 +134,8 @@ document.querySelectorAll("#tabs button").forEach((btn) => {
     btn.classList.add("active");
     document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
     $("page-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "network") loadApns();
+    if (btn.dataset.tab === "device") loadAutostart();
   });
 });
 
@@ -190,3 +192,97 @@ $("btnReboot").addEventListener("click", () => {
 });
 $("btnWeb").addEventListener("click", () => invoke("open_web"));
 $("btnQuit").addEventListener("click", () => invoke("quit_app"));
+
+// ---------------- APN / 密码 / 自启 ----------------
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadApns() {
+  const host = $("apnList");
+  if (!host) return;
+  try {
+    const apns = await invoke("get_apns");
+    if (!apns || apns.length === 0) {
+      host.innerHTML = '<span class="muted">未读取到 APN 配置</span>';
+      return;
+    }
+    host.innerHTML = "";
+    apns.forEach((apn) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.cssText = "padding:7px 0;border-bottom:1px solid rgba(0,0,0,.06)";
+      const left = document.createElement("div");
+      left.className = "grow";
+      left.innerHTML =
+        `<div style="font-weight:600">${escapeHtml(apn.profileName || "(未命名)")}` +
+        (apn.current ? ' <span style="color:#2fa84f;font-size:10.5px">当前使用</span>' : "") +
+        `</div><div class="metric-title">${escapeHtml(apn.apn)} · ${escapeHtml(apn.pdpType)} · ${escapeHtml(apn.auth)}</div>`;
+      row.appendChild(left);
+      if (!apn.current) {
+        const btn = document.createElement("button");
+        btn.textContent = "设为默认";
+        btn.addEventListener("click", async () => {
+          await invoke("set_default_apn", { index: apn.index, pdpType: apn.pdpType });
+          setTimeout(loadApns, 1200);
+          setTimeout(() => invoke("get_status").then(render), 1500);
+        });
+        row.appendChild(btn);
+      }
+      host.appendChild(row);
+    });
+  } catch (e) {
+    host.innerHTML = `<span class="warn">${escapeHtml(e)}</span>`;
+  }
+}
+
+async function loadAutostart() {
+  try {
+    const enabled = await invoke("plugin:autostart|is_enabled");
+    $("autostartSwitch").classList.toggle("on", !!enabled);
+  } catch {
+    /* 插件不可用则忽略 */
+  }
+}
+
+function wireLoginAndAutostart() {
+  $("btnSavePwd").addEventListener("click", async () => {
+    const pwd = $("adminPwd").value.trim();
+    if (!pwd) { showToast("密码不能为空", true); return; }
+    try {
+      await invoke("set_admin_password", { password: pwd });
+      $("adminPwd").value = "";
+      setTimeout(() => invoke("get_status").then(render), 800);
+    } catch (e) {
+      showToast("保存失败：" + e, true);
+    }
+  });
+
+  $("btnChangePwd").addEventListener("click", async () => {
+    const oldPwd = $("oldPwd").value;
+    const newPwd = $("newPwd").value;
+    if (!oldPwd || !newPwd) { showToast("请填写旧密码和新密码", true); return; }
+    if (newPwd.length < 6) { showToast("新密码至少 6 位", true); return; }
+    try {
+      const ok = await invoke("change_admin_password", { old: oldPwd, new: newPwd });
+      showToast(ok ? "设备密码已修改" : "修改失败", !ok);
+      if (ok) { $("oldPwd").value = ""; $("newPwd").value = ""; }
+    } catch (e) {
+      showToast("修改失败：" + e, true);
+    }
+  });
+
+  $("autostartSwitch").addEventListener("click", async () => {
+    const enable = !$("autostartSwitch").classList.contains("on");
+    try {
+      await invoke(enable ? "plugin:autostart|enable" : "plugin:autostart|disable");
+    } catch (e) {
+      showToast("开机自启设置失败：" + e, true);
+    }
+    loadAutostart();
+  });
+}
+
+loadApns();
+loadAutostart();
+wireLoginAndAutostart();

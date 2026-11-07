@@ -9,7 +9,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 const HOST: &str = "10.168.1.1";
-const PASSWORD: &str = "admin";
+const KEYRING_SERVICE: &str = "com.xuyaoshi.pgymenu";
+const KEYRING_USER: &str = "admin";
 
 const POLL_CMDS: &[&str] = &[
     "signalbar",
@@ -52,9 +53,44 @@ const POLL_CMDS: &[&str] = &[
     "run_time",
 ];
 
-#[derive(Default)]
-struct Cache {
+#[derive(Clone)]
+struct Shared {
     status: Arc<Mutex<Value>>,
+    password: Arc<Mutex<String>>,
+}
+
+impl Shared {
+    fn new() -> Self {
+        Self {
+            status: Arc::new(Mutex::new(json!({}))),
+            password: Arc::new(Mutex::new(load_admin_password())),
+        }
+    }
+
+    fn password(&self) -> String {
+        self.password
+            .lock()
+            .map(|p| p.clone())
+            .unwrap_or_else(|_| "admin".to_string())
+    }
+
+    fn set_password(&self, password: &str) {
+        if let Ok(mut stored) = self.password.lock() {
+            *stored = password.to_string();
+        }
+    }
+}
+
+fn load_admin_password() -> String {
+    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+        .ok()
+        .and_then(|entry| entry.get_password().ok())
+        .unwrap_or_else(|| "admin".to_string())
+}
+
+fn save_admin_password(password: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).map_err(|e| e.to_string())?;
+    entry.set_password(password).map_err(|e| e.to_string())
 }
 
 fn client() -> reqwest::blocking::Client {
@@ -98,9 +134,9 @@ fn api_post(
     value.as_object().cloned()
 }
 
-fn login(client: &reqwest::blocking::Client) -> bool {
+fn login(client: &reqwest::blocking::Client, password: &str) -> bool {
     let user = base64("admin");
-    let pass = base64(PASSWORD);
+    let pass = base64(password);
     match api_post(
         client,
         &[
@@ -242,16 +278,27 @@ fn update_tray(app: &AppHandle, bars: i64, connected: bool, tooltip: &str) {
     }
 }
 
-fn spawn_poller(app: AppHandle, cache: Arc<Mutex<Value>>) {
+fn spawn_poller(app: AppHandle, shared: Shared) {
     thread::spawn(move || {
         let client = client();
-        let mut logged_in = login(&client);
+        let mut logged_in = login(&client, &shared.password());
+        let mut login_fail_notified = false;
         let mut last_rx: i64 = -1;
         let mut last_tx: i64 = -1;
         let mut last_sample = Instant::now();
         loop {
             if !logged_in {
-                logged_in = login(&client);
+                logged_in = login(&client, &shared.password());
+                if !logged_in && !login_fail_notified {
+                    let _ = app.emit("toast", json!({
+                        "message": "设备登录失败：管理密码可能不对，请在 设置 → 设备 修改登录密码",
+                        "error": true
+                    }));
+                    login_fail_notified = true;
+                }
+                if logged_in {
+                    login_fail_notified = false;
+                }
             }
             if let Some(mut obj) = api_get(&client, POLL_CMDS) {
                 let rx = take_number(&obj, "realtime_rx_bytes");
@@ -274,7 +321,7 @@ fn spawn_poller(app: AppHandle, cache: Arc<Mutex<Value>>) {
                 obj.insert("logged_in".into(), json!(logged));
 
                 let value = Value::Object(obj.clone());
-                if let Ok(mut guard) = cache.lock() {
+                if let Ok(mut guard) = shared.status.lock() {
                     *guard = value.clone();
                 }
                 let _ = app.emit("status", value);
@@ -295,10 +342,10 @@ fn spawn_poller(app: AppHandle, cache: Arc<Mutex<Value>>) {
                 };
                 update_tray(&app, bars, connected, &tooltip);
                 if take_string(&obj, "loginfo") != "ok" {
-                    logged_in = login(&client);
+                    logged_in = login(&client, &shared.password());
                 }
             } else {
-                if let Ok(mut guard) = cache.lock() {
+                if let Ok(mut guard) = shared.status.lock() {
                     *guard = json!({ "offline": true });
                     let _ = app.emit("status", guard.clone());
                     update_tray(&app, 0, false, "PGY 随身 WiFi · 未连接设备");
@@ -337,8 +384,120 @@ fn position_panel(win: &WebviewWindow) {
 }
 
 #[tauri::command]
-fn get_status(cache: tauri::State<Cache>) -> Value {
-    cache.status.lock().map(|g| g.clone()).unwrap_or(json!({}))
+fn get_status(shared: tauri::State<Shared>) -> Value {
+    shared.status.lock().map(|g| g.clone()).unwrap_or(json!({}))
+}
+
+#[tauri::command]
+fn set_admin_password(
+    app: AppHandle,
+    shared: tauri::State<Shared>,
+    password: String,
+) -> Result<bool, String> {
+    save_admin_password(&password)?;
+    shared.set_password(&password);
+    let ok = login(&client(), &password);
+    let _ = app.emit(
+        "toast",
+        json!({
+            "message": if ok { "登录密码已保存，登录成功" } else { "密码已保存，但登录失败，请检查" },
+            "error": !ok
+        }),
+    );
+    Ok(ok)
+}
+
+#[tauri::command]
+fn change_admin_password(
+    shared: tauri::State<Shared>,
+    old: String,
+    new: String,
+) -> Result<bool, String> {
+    let client = client();
+    if !login(&client, &old) {
+        return Err("旧密码登录失败".into());
+    }
+    let ok = api_post(
+        &client,
+        &[
+            ("goformId", "CHANGE_PASSWORD".into()),
+            ("oldPassword", base64(&old)),
+            ("newPassword", base64(&new)),
+        ],
+    )
+    .map(|obj| obj.get("result").and_then(|v| v.as_str()) == Some("success"))
+    .unwrap_or(false);
+    if ok {
+        save_admin_password(&new)?;
+        shared.set_password(&new);
+    }
+    Ok(ok)
+}
+
+#[tauri::command]
+fn get_apns() -> Result<Value, String> {
+    let client = client();
+    let mut cmds: Vec<String> = vec![
+        "apn_mode".into(),
+        "m_profile_name".into(),
+        "wan_apn".into(),
+        "pdp_type".into(),
+    ];
+    for i in 0..20 {
+        cmds.push(format!("APN_config{i}"));
+    }
+    let refs: Vec<&str> = cmds.iter().map(|s| s.as_str()).collect();
+    let obj = api_get(&client, &refs).ok_or("无法读取 APN（设备可能未连接）")?;
+    let current = take_string(&obj, "m_profile_name");
+    let mut list = Vec::new();
+    for i in 0..20 {
+        let raw = take_string(&obj, &format!("APN_config{i}"));
+        if raw.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = raw.split("($)").collect();
+        if parts.len() < 7 {
+            continue;
+        }
+        let name = parts.get(2).unwrap_or(&"").to_string();
+        let apn = parts.get(3).unwrap_or(&"").to_string();
+        let mode = parts.get(4).unwrap_or(&"").to_string();
+        let auth = parts.get(6).unwrap_or(&"").to_string();
+        let pdp = parts.get(9).unwrap_or(&"IPv4").to_string();
+        list.push(json!({
+            "index": i,
+            "profileName": name,
+            "apn": apn,
+            "mode": mode,
+            "auth": auth,
+            "pdpType": pdp,
+            "current": !current.is_empty() && name == current,
+        }));
+    }
+    Ok(json!(list))
+}
+
+#[tauri::command]
+fn set_default_apn(app: AppHandle, index: u32, pdp_type: String) -> Result<bool, String> {
+    let client = client();
+    let ok = api_post(
+        &client,
+        &[
+            ("goformId", "APN_PROC_EX".into()),
+            ("apn_mode", "manual".into()),
+            ("apn_action", "set_default".into()),
+            ("set_default_flag", "1".into()),
+            ("pdp_type", pdp_type),
+            ("index", index.to_string()),
+        ],
+    )
+    .map(|obj| obj.get("result").and_then(|v| v.as_str()) == Some("success"))
+    .unwrap_or(false);
+    let _ = app.emit(
+        "toast",
+        json!({ "message": if ok { "APN 已切换" } else { "APN 切换失败" }, "error": !ok }),
+    );
+    Ok(ok)
 }
 
 #[tauri::command]
@@ -512,12 +671,14 @@ fn open_web() {
 }
 
 fn main() {
-    let cache = Arc::new(Mutex::new(json!({})));
+    let shared = Shared::new();
 
     tauri::Builder::default()
-        .manage(Cache {
-            status: cache.clone(),
-        })
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .manage(shared.clone())
         .setup(move |app| {
             let menu = Menu::with_items(
                 app,
@@ -560,7 +721,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            spawn_poller(handle.clone(), cache.clone());
+            spawn_poller(handle.clone(), shared.clone());
 
             // 截图/自动化测试用：--show-settings / --show-panel
             let args: Vec<String> = std::env::args().collect();
@@ -598,7 +759,11 @@ fn main() {
             set_upnp,
             save_dmz,
             reboot,
-            open_web
+            open_web,
+            set_admin_password,
+            change_admin_password,
+            get_apns,
+            set_default_apn
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
