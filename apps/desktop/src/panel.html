@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PGY 随身 WiFi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="panel">
+  <div class="panel-shell">
+    <div class="panel-header">
+      <div>
+        <div class="name" id="provider">随身 WiFi</div>
+        <div class="sub" id="subtitle">连接中…</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="panel-body">
+      <div class="card">
+        <h3>信号</h3>
+        <div class="grid-3">
+          <div><div class="metric-title">RSRP</div><div class="metric-value" id="rsrp">--</div></div>
+          <div><div class="metric-title">SINR</div><div class="metric-value" id="sinr">--</div></div>
+          <div><div class="metric-title">RSRQ</div><div class="metric-value" id="rsrq">--</div></div>
+          <div><div class="metric-title">频段</div><div class="metric-value" id="band">--</div></div>
+          <div><div class="metric-title">PCI</div><div class="metric-value" id="pci">--</div></div>
+          <div><div class="metric-title">网络</div><div class="metric-value" id="net">--</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>流量</h3>
+        <div class="row" style="gap:16px">
+          <span class="metric-value" style="color:#2fa84f" id="rxSpeed">↓ --</span>
+          <span class="metric-value" style="color:#3b82f6" id="txSpeed">↑ --</span>
+        </div>
+        <div class="row" style="margin-top:8px;gap:16px">
+          <span class="muted" id="session">本次 --</span>
+          <span class="muted" id="monthly">本月 --</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="grow">
+            <div style="font-weight:600" id="wifiName">WiFi</div>
+            <div class="metric-title" id="wifiHint">--</div>
+          </div>
+          <button class="switch" id="wifiSwitch" title="WiFi 开关"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <button id="btnSettings">⚙ 设置</button>
+      <button id="btnWeb">网页</button>
+      <div class="spacer"></div>
+      <button id="btnQuit">退出</button>
+    </div>
+  </div>
+<script src="panel.js"></script>
+</body>
+</html>

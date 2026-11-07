@@ -1,0 +1,19 @@
+[package]
+name = "pgymenu-tauri"
+version = "1.0.0"
+description = "PGY 随身 WiFi 菜单栏客户端（Tauri 2 原型）"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

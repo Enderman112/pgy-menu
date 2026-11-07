@@ -1,0 +1,16 @@
+{
+  "name": "pgy-menu",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PGY 随身 WiFi 桌面客户端（Tauri 2）",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:debug": "tauri build --debug",
+    "icon": "tauri icon",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0"
+  }
+}
